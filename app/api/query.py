@@ -44,12 +44,21 @@ def query(
         owner_id=principal.owner_id,
         top_k=body.top_k,
     )
-    return generate_grounded_answer(
-        question=body.question,
-        retrieved_chunks=chunks,
-        llm=request.app.state.llm,
-        min_relevance=request.app.state.settings.min_relevance,
-    )
+    try:
+        return generate_grounded_answer(
+            question=body.question,
+            retrieved_chunks=chunks,
+            llm=request.app.state.llm,
+            min_relevance=request.app.state.settings.min_relevance,
+        )
+    except Exception as exc:
+        # If the LLM backend (Ollama) is unavailable or errors out,
+        # return a helpful 503 Service Unavailable instead of a bare 500.
+        from fastapi import HTTPException, status
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"LLM generation failed: {exc}. Is Ollama running?",
+        ) from exc
 
 
 @router.post("/search")
