@@ -21,3 +21,5 @@
 | 17 | Score-gated rejection for unanswerable distractors | Chunks falling below `min_relevance` immediately yield `found: false` without invoking the LLM, preventing hallucinated answers. |
 | 18 | Strict upload validation for 0-byte and unsupported formats | Prevents corrupt physical files or empty database rows from being created. |
 | 19 | Oversize paragraph subdivision in chunker | Guarantees strict token budget compliance even for continuous texts lacking paragraph double-newlines. |
+| 20 | Lazy initialization of sentence-transformers embedding model | Avoids 30s synchronous block on FastAPI lifespan startup; ensures `app.state` is immediately available. |
+| 21 | Model pre-warming in `start.ps1` and 300s timeout on Ollama client | Loads CPU-bound models into memory before the user interacts; prevents client-side timeout while loading weights on disk/CPU. |
