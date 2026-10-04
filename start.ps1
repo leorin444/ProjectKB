@@ -153,14 +153,14 @@ $apiProcess = Start-Process -FilePath $VenvPython `
     -PassThru
 
 $healthUrl  = "http://$ApiHost`:$ApiPort/health"
-$maxRetries = 25
+$maxRetries = 90   # up to 90s — first run loads the embedding model into RAM
 $healthy    = $false
-Write-Host -NoNewline "        Waiting for API server" -ForegroundColor DarkGray
+Write-Host -NoNewline "        Waiting for API server (may take ~30s on first run)" -ForegroundColor DarkGray
 
 for ($i = 0; $i -lt $maxRetries; $i++) {
-    Start-Sleep -Milliseconds 600
+    Start-Sleep -Seconds 1
     try {
-        $resp = Invoke-RestMethod -Uri $healthUrl -Method Get -TimeoutSec 2 -ErrorAction SilentlyContinue
+        $resp = Invoke-RestMethod -Uri $healthUrl -Method Get -TimeoutSec 5 -ErrorAction SilentlyContinue
         if ($resp -and $resp.status) { $healthy = $true; break }
     } catch {
         Write-Host -NoNewline "." -ForegroundColor DarkGray
