@@ -9,6 +9,13 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from app.ingestion.video_frames import (
+    deduplicate_frames,
+    describe_video_frames,
+    extract_candidate_keyframes,
+)
+from app.llm.base import LLMClient
+
 logger = logging.getLogger("kb.ingestion.media")
 
 
@@ -135,17 +142,49 @@ def transcribe_audio(
     return segments, duration
 
 
+def merge_transcript_and_visuals(
+    transcript_sections: list[dict[str, Any]],
+    frame_descriptions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Merge audio transcript sections with visual keyframe descriptions
+    into unified time sections."""
+    if not frame_descriptions:
+        return transcript_sections
+
+    sections = [dict(s) for s in transcript_sections]
+
+    for frame in frame_descriptions:
+        ts = frame["timestamp"]
+        desc = frame["description"]
+        ts_str = format_seconds(ts)
+        visual_block = f"\n\n**On-screen ({ts_str}):**\n{desc}"
+
+        matched = False
+        for s in sections:
+            start = s.get("start_ts", 0.0)
+            end = s.get("end_ts", start + 60.0)
+            if start <= ts <= end:
+                s["content"] = s["content"] + visual_block
+                matched = True
+                break
+
+        if not matched:
+            sections.append({
+                "heading": f"{ts_str} - {format_seconds(ts + 30.0)}",
+                "content": f"**On-screen:**\n{desc}",
+                "start_ts": ts,
+                "end_ts": ts + 30.0,
+            })
+
+    sections.sort(key=lambda s: s.get("start_ts", 0.0))
+    return sections
+
+
 def extract_media(
     file_path: Path,
     whisper_model: str = "tiny",
 ) -> tuple[str, list[dict[str, Any]], float]:
-    """Extract audio from video or audio file and transcribe into time-coded sections.
-
-    Returns:
-    - title: inferred document title
-    - sections: list of {"heading": str, "content": str, "start_ts": float, "end_ts": float}
-    - duration: float total length in seconds
-    """
+    """Extract audio from audio file and transcribe into time-coded sections."""
     title = file_path.stem.replace("_", " ").replace("-", " ").title()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -163,3 +202,50 @@ def extract_media(
         }]
 
     return title, sections, duration
+
+
+def extract_video(
+    file_path: Path,
+    frames_dir: Path,
+    llm: LLMClient,
+    whisper_model: str = "tiny",
+    max_frames: int = 30,
+    dedup_threshold: int = 6,
+) -> tuple[str, list[dict[str, Any]], float]:
+    """Multimodal video extraction: audio transcription + scene keyframes + VLM descriptions."""
+    title = file_path.stem.replace("_", " ").replace("-", " ").title()
+    sections: list[dict[str, Any]] = []
+    duration = 0.0
+
+    # 1. Audio track extraction & transcription (handles silent video gracefully)
+    try:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            wav_path = Path(tmp_dir) / "extracted.wav"
+            extract_audio_track(file_path, wav_path)
+            segments, dur = transcribe_audio(wav_path, model_size=whisper_model)
+            duration = dur
+            sections = group_segments_into_sections(segments, target_duration=60.0)
+    except Exception as exc:  # noqa: BLE001
+        logger.info(
+            f"Video audio extraction skipped or failed ({exc}); proceeding with visuals only."
+        )
+
+    # 2. Keyframe extraction & deduplication
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    raw_frames = extract_candidate_keyframes(file_path, frames_dir)
+    kept_frames = deduplicate_frames(raw_frames, threshold=dedup_threshold, max_frames=max_frames)
+
+    # 3. VLM descriptions of unique frames
+    frame_descriptions = describe_video_frames(kept_frames, llm)
+
+    # 4. Multimodal time-merging
+    merged_sections = merge_transcript_and_visuals(sections, frame_descriptions)
+    if not merged_sections:
+        merged_sections = [{
+            "heading": "00:00 - 00:00",
+            "content": "(No spoken or visual content extracted from video)",
+            "start_ts": 0.0,
+            "end_ts": duration,
+        }]
+
+    return title, merged_sections, duration

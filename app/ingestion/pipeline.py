@@ -17,7 +17,7 @@ from app.config import Settings
 from app.ingestion.chunker import chunk_markdown
 from app.ingestion.image import extract_image
 from app.ingestion.markdown_writer import write_markdown_file
-from app.ingestion.media import extract_media
+from app.ingestion.media import extract_media, extract_video
 from app.ingestion.pdf import extract_pdf
 from app.llm.base import LLMClient
 from app.retrieval.embeddings import EmbeddingInterface
@@ -78,7 +78,19 @@ def _process_and_index_document(
         detected_title, sections = extract_image(orig_path, llm)
         if detected_title:
             title = detected_title
-    elif doc_type in {"audio", "video"}:
+    elif doc_type == "video":
+        doc_frames_dir = settings.frames_dir / doc_id
+        detected_title, sections, duration = extract_video(
+            orig_path,
+            frames_dir=doc_frames_dir,
+            llm=llm,
+            whisper_model=settings.whisper_model,
+            max_frames=settings.max_frames_per_video,
+            dedup_threshold=settings.frame_dedup_threshold,
+        )
+        if detected_title:
+            title = detected_title
+    elif doc_type == "audio":
         detected_title, sections, duration = extract_media(
             orig_path, whisper_model=settings.whisper_model
         )

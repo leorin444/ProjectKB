@@ -90,7 +90,7 @@ def delete_document(
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
 
-    # Delete physical files
+    # Delete physical files & frames folder
     for p_key in ("source_path", "md_path"):
         p_val = doc.get(p_key)
         if p_val and Path(p_val).is_file():
@@ -98,6 +98,12 @@ def delete_document(
                 Path(p_val).unlink()
             except OSError:
                 pass
+
+    import shutil
+    settings = request.app.state.settings
+    doc_frames = settings.frames_dir / doc_id
+    if doc_frames.is_dir():
+        shutil.rmtree(doc_frames, ignore_errors=True)
 
     # Delete from Qdrant and SQLite
     vectors.delete_by_document(doc_id, owner_id=principal.owner_id)
