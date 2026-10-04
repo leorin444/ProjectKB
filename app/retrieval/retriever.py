@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.retrieval.embeddings import EmbeddingInterface
+from app.retrieval.reranker import RerankerInterface
 from app.storage.db import SqliteDatabase
 from app.storage.vector_store import VectorStore
 
@@ -36,6 +37,9 @@ def reciprocal_rank_fusion(
     for c_id, score in sorted(scores.items(), key=lambda x: x[1], reverse=True):
         item = dict(doc_map[c_id])
         item["rrf_score"] = score
+        # If item doesn't have an explicit score from vector or reranker, expose rrf_score
+        if "score" not in item or item["score"] is None:
+            item["score"] = score
         fused.append(item)
 
     return fused
@@ -48,11 +52,13 @@ class HybridRetriever:
         vectors: VectorStore,
         embeddings: EmbeddingInterface,
         min_relevance: float = 0.25,
+        reranker: RerankerInterface | None = None,
     ) -> None:
         self.db = db
         self.vectors = vectors
         self.embeddings = embeddings
         self.min_relevance = min_relevance
+        self.reranker = reranker
 
     def retrieve(
         self,
@@ -73,11 +79,15 @@ class HybridRetriever:
 
         # 4. Attach document titles
         results: list[dict[str, Any]] = []
-        for item in merged[:top_k]:
+        for item in merged:
             doc_id = item.get("document_id")
             doc = self.db.get_document(doc_id, owner_id=owner_id) if doc_id else None
             title = doc["title"] if doc else "Unknown Document"
             item["document_title"] = title
             results.append(item)
 
-        return results
+        # 5. Optional Cross-Encoder reranking
+        if self.reranker is not None and results:
+            return self.reranker.rerank(query, results, top_k=top_k)
+
+        return results[:top_k]

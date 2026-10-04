@@ -37,6 +37,7 @@ def query(
         vectors=request.app.state.vectors,
         embeddings=request.app.state.embeddings,
         min_relevance=request.app.state.settings.min_relevance,
+        reranker=getattr(request.app.state, "reranker", None),
     )
     chunks = retriever.retrieve(
         query=body.question,
@@ -63,6 +64,7 @@ def search(
         vectors=request.app.state.vectors,
         embeddings=request.app.state.embeddings,
         min_relevance=0.0,
+        reranker=getattr(request.app.state, "reranker", None),
     )
     return retriever.retrieve(
         query=body.query,

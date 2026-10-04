@@ -20,6 +20,7 @@ from app.llm.base import LLMClient
 from app.llm.ollama_client import OllamaClient
 from app.logging_config import log_kv, setup_logging
 from app.retrieval.embeddings import LocalEmbeddingModel
+from app.retrieval.reranker import CrossEncoderReranker, RerankerInterface
 from app.storage.db import SqliteDatabase
 from app.storage.vector_store import QdrantEmbeddedStore
 
@@ -30,6 +31,7 @@ def create_app(
     settings: Settings | None = None,
     llm: LLMClient | None = None,
     embeddings: object | None = None,
+    reranker: RerankerInterface | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
 
@@ -58,6 +60,11 @@ def create_app(
         )
         app.state.embeddings = embeddings or LocalEmbeddingModel(settings.embed_model)
         app.state.job_manager = job_manager
+        app.state.reranker = (
+            reranker
+            if reranker is not None
+            else (CrossEncoderReranker(settings.reranker_model) if settings.use_reranker else None)
+        )
 
         log_kv(logger, logging.INFO, "startup complete", data_dir=str(settings.data_dir))
         try:

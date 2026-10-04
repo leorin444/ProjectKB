@@ -22,5 +22,12 @@ All non-health endpoints (added in later phases) require the `X-API-Key` header.
 - `POST /documents/{doc_id}/reindex` - Re-chunk, re-embed, and re-index an existing document.
 
 ### Retrieval & Grounded Query
-- `POST /search` - Hybrid vector + FTS5 retrieval with RRF ranking (inspect chunks and relevance scores).
-- `POST /query` - Strict grounded question-answering with citations (`[Doc Title - Section (HH:MM:SS)]`).
+- `POST /search` - Hybrid vector + FTS5 retrieval with RRF ranking (and optional Cross-Encoder reranking when `USE_RERANKER=true`).
+- `POST /query` - Strict grounded question-answering with citations (`[Doc Title - Section (HH:MM:SS)]`). Queries with top relevance score below `min_relevance` automatically return `{"found": false, ...}` without hallucinating.
+
+## Evaluation
+A standardized benchmark script is provided in `scripts/evaluate.py`:
+```powershell
+.\.venv\Scripts\python.exe scripts/evaluate.py --host http://127.0.0.1:8000 --api-key <key>
+```
+Reports Hit@1, Hit@3, Hit@5, MRR, and Distractor Rejection Rate.

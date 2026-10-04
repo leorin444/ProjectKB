@@ -17,3 +17,5 @@
 | 13 | Perceptual dHash (64-bit difference hash) with Hamming distance threshold <= 6 | Discards redundant, near-identical keyframes before expensive VLM inference. |
 | 14 | Multimodal time-merging of audio transcript + visual keyframe descriptions | Integrates spoken dialogue and on-screen visuals (slides, code errors, diagrams) into coherent chronological sections with grounded timestamps. |
 | 15 | Cooperative job cancellation and rerun | Allows long-running indexing tasks to be gracefully aborted or restarted without leaving inconsistent database state. |
+| 16 | Optional Cross-Encoder reranker behind RerankerInterface | Allows precision reranking of the top RRF candidate pool without forcing model download when `USE_RERANKER=false`. |
+| 17 | Score-gated rejection for unanswerable distractors | Chunks falling below `min_relevance` immediately yield `found: false` without invoking the LLM, preventing hallucinated answers. |

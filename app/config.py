@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     chunk_overlap: int = 50
     min_relevance: float = 0.25
     use_reranker: bool = False
+    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
     # Video
     max_frames_per_video: int = 300
