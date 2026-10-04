@@ -11,9 +11,13 @@ import time
 
 import httpx
 import streamlit as st
+from dotenv import load_dotenv
+
+# Automatically load API_KEY and configurations from .env
+load_dotenv()
 
 API_URL = os.environ.get("KB_API_URL", "http://127.0.0.1:8000")
-API_KEY = os.environ.get("KB_API_KEY", "")
+API_KEY = os.environ.get("API_KEY", os.environ.get("KB_API_KEY", ""))
 
 st.set_page_config(page_title="Local Knowledge Base", page_icon="🧠", layout="wide")
 
@@ -51,7 +55,7 @@ with st.sidebar:
 
     if st.button("Check Health"):
         try:
-            h = httpx.get(f"{API_URL}/health", timeout=5.0).json()
+            h = httpx.get(f"{API_URL}/health", timeout=15.0).json()
             overall = h.get("status", "unknown")
             color = "green" if overall == "ok" else "orange"
             st.markdown(f"**Status:** :{color}[{overall.upper()}]")
