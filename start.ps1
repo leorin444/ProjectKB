@@ -74,8 +74,10 @@ Write-Host ""
 Write-Host "  [1/4] Ollama Service..." -ForegroundColor Yellow
 
 $ollamaRunning = $false
+$ollamaUrl = "http://127.0.0.1:11434"
+
 try {
-    $null = Invoke-RestMethod -Uri "http://localhost:11434/api/tags" -Method Get -TimeoutSec 3
+    $null = Invoke-RestMethod -Uri "$ollamaUrl/api/tags" -Method Get -TimeoutSec 3
     $ollamaRunning = $true
     Write-Host "        [OK] Ollama already running." -ForegroundColor Green
 } catch {
@@ -90,10 +92,10 @@ try {
     $ollamaProcess = Start-Process -FilePath "ollama" -ArgumentList "serve" -PassThru -WindowStyle Hidden
 
     Write-Host -NoNewline "        Waiting for Ollama to become ready" -ForegroundColor DarkGray
-    for ($i = 0; $i -lt 25; $i++) {
+    for ($i = 0; $i -lt 45; $i++) {
         Start-Sleep -Milliseconds 600
         try {
-            $null = Invoke-RestMethod -Uri "http://localhost:11434/api/tags" -Method Get -TimeoutSec 2
+            $null = Invoke-RestMethod -Uri "$ollamaUrl/api/tags" -Method Get -TimeoutSec 2
             $ollamaRunning = $true
             break
         } catch {
@@ -116,7 +118,7 @@ Write-Host "  [2/4] Checking required Ollama models..." -ForegroundColor Yellow
 
 if ($ollamaRunning) {
     try {
-        $tagResp        = Invoke-RestMethod -Uri "http://localhost:11434/api/tags" -Method Get -TimeoutSec 5
+        $tagResp        = Invoke-RestMethod -Uri "$ollamaUrl/api/tags" -Method Get -TimeoutSec 5
         $availableNames = $tagResp.models | ForEach-Object { $_.name }
 
         foreach ($model in @($RequiredLlmModel, $RequiredVisionModel)) {
@@ -137,7 +139,7 @@ if ($ollamaRunning) {
         Write-Host "        Pre-warming $RequiredLlmModel (loading into RAM, please wait)..." -ForegroundColor DarkGray
         try {
             $warmBody = '{"model":"' + $RequiredLlmModel + '","prompt":"hi","stream":false,"keep_alive":"60m"}'
-            $null = Invoke-RestMethod -Uri "http://localhost:11434/api/generate" -Method Post -Body $warmBody -ContentType "application/json" -TimeoutSec 180
+            $null = Invoke-RestMethod -Uri "$ollamaUrl/api/generate" -Method Post -Body $warmBody -ContentType "application/json" -TimeoutSec 180
             Write-Host "        [OK] $RequiredLlmModel ready in memory." -ForegroundColor Green
         } catch {
             Write-Host "        [WARN] Warm-up took longer than expected: $_" -ForegroundColor Yellow
