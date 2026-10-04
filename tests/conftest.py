@@ -40,3 +40,21 @@ class FakeLLM:
 
     def describe_image(self, image_bytes: bytes, prompt: str) -> str:
         raise NotImplementedError
+
+
+class FakeEmbeddings:
+    """TEST DOUBLE: deterministic unit-length 384-dim embeddings (no model download)."""
+
+    def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        import hashlib
+        out = []
+        for t in texts:
+            digest = hashlib.md5(t.encode(), usedforsecurity=False).digest()
+            base = [(b / 255.0 - 0.5) for b in digest]
+            v = (base * (384 // len(base) + 1))[:384]
+            norm = sum(x ** 2 for x in v) ** 0.5 or 1.0
+            out.append([x / norm for x in v])
+        return out
+
+    def embed_query(self, text: str) -> list[float]:
+        return self.embed_texts([text])[0]

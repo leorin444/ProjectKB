@@ -1,4 +1,4 @@
-"""FastAPI app: wiring and lifespan (init DB + vector store)."""
+"""FastAPI app: wiring and lifespan (init DB + vector store + embeddings)."""
 
 from __future__ import annotations
 
@@ -9,18 +9,26 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.documents import router as documents_router
+from app.api.ingest import router as ingest_router
+from app.api.query import router as query_router
 from app.config import Settings, get_settings
 from app.health import HealthResponse, build_health
 from app.llm.base import LLMClient
 from app.llm.ollama_client import OllamaClient
 from app.logging_config import log_kv, setup_logging
+from app.retrieval.embeddings import LocalEmbeddingModel
 from app.storage.db import SqliteDatabase
 from app.storage.vector_store import QdrantEmbeddedStore
 
 logger = logging.getLogger("kb.main")
 
 
-def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    llm: LLMClient | None = None,
+    embeddings: object | None = None,
+) -> FastAPI:
     settings = settings or get_settings()
 
     @asynccontextmanager
@@ -29,32 +37,49 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
         settings.ensure_dirs()
         if settings.api_key == "change-me":
             logger.warning("API_KEY is the default 'change-me' - set a real key in .env")
+
         db = SqliteDatabase(settings.db_path)
         db.init_schema()
+
         vectors = QdrantEmbeddedStore(settings.index_dir)
         vectors.ensure_collection()
-        app.state.db, app.state.vectors = db, vectors
-        app.state.llm = llm or OllamaClient(settings.ollama_base_url)
+
+        app.state.db = db
+        app.state.vectors = vectors
+        app.state.settings = settings
+        app.state.llm = llm or OllamaClient(
+            base_url=settings.ollama_base_url,
+            model=settings.llm_model,
+            vision_model=settings.vision_model,
+        )
+        app.state.embeddings = embeddings or LocalEmbeddingModel(settings.embed_model)
+
         log_kv(logger, logging.INFO, "startup complete", data_dir=str(settings.data_dir))
         try:
             yield
         finally:
-            vectors.close()  # release the embedded-Qdrant folder lock
+            vectors.close()
 
     app = FastAPI(title="Local Knowledge Base", version="0.1.0", lifespan=lifespan)
     app.state.settings = settings
 
-    if settings.cors_origin_list:  # off by default
+    if settings.cors_origin_list:
         app.add_middleware(
-            CORSMiddleware, allow_origins=settings.cors_origin_list,
-            allow_methods=["*"], allow_headers=["*"],
+            CORSMiddleware,
+            allow_origins=settings.cors_origin_list,
+            allow_methods=["*"],
+            allow_headers=["*"],
         )
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     def health(request: Request) -> HealthResponse:
-        """Report Ollama, model availability, DB, vector store and ffmpeg. Unauthenticated."""
+        """Report all dependencies. Unauthenticated."""
         s = request.app.state
         return build_health(settings, s.db, s.vectors, s.llm)
+
+    app.include_router(ingest_router)
+    app.include_router(documents_router)
+    app.include_router(query_router)
 
     return app
 

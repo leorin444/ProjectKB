@@ -6,11 +6,11 @@ from fastapi.testclient import TestClient
 from app.auth import Principal, get_principal
 from app.config import Settings
 from app.main import create_app
-from tests.conftest import FakeLLM
+from tests.conftest import FakeEmbeddings, FakeLLM
 
 
 def _health(settings: Settings, llm: FakeLLM, monkeypatch=None) -> dict:
-    with TestClient(create_app(settings, llm=llm)) as client:
+    with TestClient(create_app(settings, llm=llm, embeddings=FakeEmbeddings())) as client:
         r = client.get("/health")
         assert r.status_code == 200
         return r.json()
@@ -41,12 +41,12 @@ def test_health_ollama_down_is_reported_not_raised(settings: Settings) -> None:
 
 
 def test_health_needs_no_api_key(settings: Settings) -> None:
-    with TestClient(create_app(settings, llm=FakeLLM())) as client:
+    with TestClient(create_app(settings, llm=FakeLLM(), embeddings=FakeEmbeddings())) as client:
         assert client.get("/health").status_code == 200
 
 
 def test_cors_off_by_default(settings: Settings) -> None:
-    with TestClient(create_app(settings, llm=FakeLLM())) as client:
+    with TestClient(create_app(settings, llm=FakeLLM(), embeddings=FakeEmbeddings())) as client:
         r = client.get("/health", headers={"Origin": "http://evil.example"})
         assert "access-control-allow-origin" not in r.headers
 
