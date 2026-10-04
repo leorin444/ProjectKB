@@ -34,6 +34,12 @@ def api_post(path: str, **kwargs):
     return r.json()
 
 
+def api_delete(path: str, **kwargs):
+    r = httpx.delete(f"{API_URL}{path}", headers=api_headers(), timeout=30.0, **kwargs)
+    r.raise_for_status()
+    return r.json()
+
+
 # ---- Sidebar: API config ----
 with st.sidebar:
     st.title("🧠 Knowledge Base")
@@ -153,9 +159,7 @@ with tab_docs:
                     with col2:
                         if st.button("🗑️ Delete", key=f"del_{doc['id']}"):
                             try:
-                                api_post(
-                                    f"/documents/{doc['id']}",
-                                )
+                                api_delete(f"/documents/{doc['id']}")
                                 st.warning("Deleted.")
                                 st.rerun()
                             except Exception as e:

@@ -80,7 +80,29 @@ def split_section_body(
         if chunk_str:
             chunks.append(chunk_str)
 
-    return chunks
+    # Secondary pass: if any chunk exceeds max_tokens (e.g. single giant paragraph without \n\n),
+    # subdivide it by sentences / words to strictly respect token budget
+    subdivided_chunks: list[str] = []
+    for c in chunks:
+        if estimate_tokens(c) <= max_tokens:
+            subdivided_chunks.append(c)
+        else:
+            words = c.split()
+            current_words: list[str] = []
+            curr_w_tokens = 0
+            for w in words:
+                w_tok = estimate_tokens(w + " ")
+                if curr_w_tokens + w_tok > max_tokens and current_words:
+                    subdivided_chunks.append(" ".join(current_words))
+                    current_words = [w]
+                    curr_w_tokens = w_tok
+                else:
+                    current_words.append(w)
+                    curr_w_tokens += w_tok
+            if current_words:
+                subdivided_chunks.append(" ".join(current_words))
+
+    return subdivided_chunks
 
 
 def chunk_markdown(

@@ -19,3 +19,5 @@
 | 15 | Cooperative job cancellation and rerun | Allows long-running indexing tasks to be gracefully aborted or restarted without leaving inconsistent database state. |
 | 16 | Optional Cross-Encoder reranker behind RerankerInterface | Allows precision reranking of the top RRF candidate pool without forcing model download when `USE_RERANKER=false`. |
 | 17 | Score-gated rejection for unanswerable distractors | Chunks falling below `min_relevance` immediately yield `found: false` without invoking the LLM, preventing hallucinated answers. |
+| 18 | Strict upload validation for 0-byte and unsupported formats | Prevents corrupt physical files or empty database rows from being created. |
+| 19 | Oversize paragraph subdivision in chunker | Guarantees strict token budget compliance even for continuous texts lacking paragraph double-newlines. |
