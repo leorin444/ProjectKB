@@ -5,7 +5,9 @@ Communicates with the FastAPI backend ONLY via HTTP (X-API-Key auth).
 
 from __future__ import annotations
 
+import json
 import os
+import time
 
 import httpx
 import streamlit as st
@@ -60,37 +62,66 @@ tab_upload, tab_docs, tab_ask = st.tabs(["📁 Upload", "📄 Documents", "💬 
 
 # ================ UPLOAD TAB ================
 with tab_upload:
-    st.header("Upload Document or Screenshot")
+    st.header("Upload Document, Screenshot, Audio, or Video")
     uploaded = st.file_uploader(
-        "Choose a file (PDF, PNG, JPG, TXT, MD)",
-        type=["pdf", "png", "jpg", "jpeg", "webp", "bmp", "txt", "md"],
+        "Choose a file (PDF, Images, Audio, Video, Markdown, Text)",
+        type=[
+            "pdf", "png", "jpg", "jpeg", "webp", "bmp", "txt", "md",
+            "mp3", "wav", "m4a", "ogg", "flac", "aac",
+            "mp4", "mkv", "avi", "mov", "webm",
+        ],
     )
-    tags_input = st.text_input("Tags (comma-separated, optional)", placeholder="tutorial, setup")
+    tags_input = st.text_input("Tags (comma-separated, optional)", placeholder="tutorial, meeting")
 
     if uploaded and st.button("⬆️ Ingest"):
-        with st.spinner("Ingesting... (image VLM analysis may take a few minutes on CPU)"):
-            tag_list = [t.strip() for t in tags_input.split(",") if t.strip()]
-            import json
+        tag_list = [t.strip() for t in tags_input.split(",") if t.strip()]
 
-            try:
-                files = {"file": (uploaded.name, uploaded.read(), uploaded.type)}
-                result = httpx.post(
-                    f"{API_URL}/ingest/file",
-                    headers=api_headers(),
-                    files=files,
-                    data={"tags": json.dumps(tag_list)},
-                    timeout=600.0,
-                ).json()
-                if "document_id" in result:
-                    st.success(
-                        f"✅ Ingested **{result.get('title', uploaded.name)}** "
-                        f"({result.get('chunk_count', 0)} chunks)"
-                    )
-                    st.json(result)
-                else:
-                    st.error(f"Ingestion error: {result}")
-            except Exception as exc:
-                st.error(f"Error: {exc}")
+        try:
+            mime = uploaded.type or "application/octet-stream"
+            files = {"file": (uploaded.name, uploaded.read(), mime)}
+            r = httpx.post(
+                f"{API_URL}/ingest/file",
+                headers=api_headers(),
+                files=files,
+                data={"tags": json.dumps(tag_list)},
+                timeout=600.0,
+            )
+            result = r.json()
+
+            # Background job handling (audio/video or async jobs)
+            if r.status_code == 202 and "job_id" in result:
+                job_id = result["job_id"]
+                st.info(f"⏳ Ingestion queued (Job ID: `{job_id}`). Processing media...")
+                prog_bar = st.progress(0)
+                status_text = st.empty()
+
+                while True:
+                    time.sleep(2)
+                    job_info = api_get(f"/jobs/{job_id}")
+                    status = job_info.get("status")
+                    stage = job_info.get("stage", "processing")
+                    progress = job_info.get("progress", 0)
+
+                    prog_bar.progress(min(progress, 100))
+                    status_text.caption(f"Stage: **{stage}** ({progress}%)")
+
+                    if status == "completed":
+                        st.success("✅ Media transcription and indexing complete!")
+                        st.json(job_info)
+                        break
+                    elif status == "failed":
+                        st.error(f"❌ Processing failed: {job_info.get('error')}")
+                        break
+            elif "document_id" in result:
+                st.success(
+                    f"✅ Ingested **{result.get('title', uploaded.name)}** "
+                    f"({result.get('chunk_count', 0)} chunks)"
+                )
+                st.json(result)
+            else:
+                st.error(f"Ingestion error: {result}")
+        except Exception as exc:
+            st.error(f"Error: {exc}")
 
 
 # ================ DOCUMENTS TAB ================
@@ -136,7 +167,10 @@ with tab_docs:
 # ================ ASK TAB ================
 with tab_ask:
     st.header("Ask a Question")
-    question = st.text_area("Your question", placeholder="How did I fix the peer dependency error?")
+    question = st.text_area(
+        "Your question",
+        placeholder="What was discussed at minute 12 in the meeting?",
+    )
     top_k = st.slider("Max chunks to retrieve", 2, 20, 5)
 
     if st.button("🔍 Ask") and question.strip():
@@ -152,12 +186,12 @@ with tab_ask:
                         title = c.get("title", "Document")
                         section = c.get("section", "General")
                         ts = ""
-                        if c.get("start_ts") and c.get("end_ts"):
+                        if c.get("start_ts") is not None and c.get("end_ts") is not None:
                             def _fmt(sec):
                                 s = int(sec)
                                 h, m, s2 = s // 3600, (s % 3600) // 60, s % 60
                                 return f"{h:02d}:{m:02d}:{s2:02d}" if h else f"{m:02d}:{s2:02d}"
-                            ts = f" @ {_fmt(c['start_ts'])} – {_fmt(c['end_ts'])}"
+                            ts = f" ⏱️ `{_fmt(c['start_ts'])} – {_fmt(c['end_ts'])}`"
                         with st.container(border=True):
                             st.caption(f"📌 **{title}** — *{section}*{ts}")
                             st.write(c.get("snippet", ""))

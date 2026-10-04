@@ -135,7 +135,11 @@ class SqliteDatabase:
         with self.connect() as conn:
             conn.execute(
                 "INSERT INTO documents(id,type,title,original_name,source_path,md_path,tags,"
-                "owner_id,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                "owner_id,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?) "
+                "ON CONFLICT(id) DO UPDATE SET "
+                "type=excluded.type, title=excluded.title, original_name=excluded.original_name, "
+                "source_path=excluded.source_path, md_path=excluded.md_path, tags=excluded.tags, "
+                "status=excluded.status, updated_at=excluded.updated_at",
                 (doc_id, type, title, original_name, source_path, md_path, tags, owner_id,
                  status, now, now),
             )

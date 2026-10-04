@@ -1,4 +1,4 @@
-"""FastAPI app: wiring and lifespan (init DB + vector store + embeddings)."""
+"""FastAPI app: wiring and lifespan (init DB + vector store + embeddings + job queue)."""
 
 from __future__ import annotations
 
@@ -11,9 +11,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.documents import router as documents_router
 from app.api.ingest import router as ingest_router
+from app.api.jobs import router as jobs_router
 from app.api.query import router as query_router
 from app.config import Settings, get_settings
 from app.health import HealthResponse, build_health
+from app.jobs.manager import JobManager
 from app.llm.base import LLMClient
 from app.llm.ollama_client import OllamaClient
 from app.logging_config import log_kv, setup_logging
@@ -44,6 +46,8 @@ def create_app(
         vectors = QdrantEmbeddedStore(settings.index_dir)
         vectors.ensure_collection()
 
+        job_manager = JobManager(db=db, max_workers=1)
+
         app.state.db = db
         app.state.vectors = vectors
         app.state.settings = settings
@@ -53,11 +57,13 @@ def create_app(
             vision_model=settings.vision_model,
         )
         app.state.embeddings = embeddings or LocalEmbeddingModel(settings.embed_model)
+        app.state.job_manager = job_manager
 
         log_kv(logger, logging.INFO, "startup complete", data_dir=str(settings.data_dir))
         try:
             yield
         finally:
+            job_manager.shutdown(wait=False)
             vectors.close()
 
     app = FastAPI(title="Local Knowledge Base", version="0.1.0", lifespan=lifespan)
@@ -80,6 +86,7 @@ def create_app(
     app.include_router(ingest_router)
     app.include_router(documents_router)
     app.include_router(query_router)
+    app.include_router(jobs_router)
 
     return app
 
