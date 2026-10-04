@@ -134,6 +134,14 @@ if ($ollamaRunning) {
                 }
             }
         }
+        Write-Host "        Pre-warming $RequiredLlmModel (loading into RAM, please wait)..." -ForegroundColor DarkGray
+        try {
+            $warmBody = '{"model":"' + $RequiredLlmModel + '","prompt":"hi","stream":false,"keep_alive":"60m"}'
+            $null = Invoke-RestMethod -Uri "http://localhost:11434/api/generate" -Method Post -Body $warmBody -ContentType "application/json" -TimeoutSec 180
+            Write-Host "        [OK] $RequiredLlmModel ready in memory." -ForegroundColor Green
+        } catch {
+            Write-Host "        [WARN] Warm-up took longer than expected: $_" -ForegroundColor Yellow
+        }
     } catch {
         Write-Host "        [WARN] Could not query Ollama model list: $_" -ForegroundColor Yellow
     }

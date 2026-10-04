@@ -22,7 +22,7 @@ class OllamaClient:
         base_url: str,
         model: str = "llama3.2:1b",
         vision_model: str = "moondream",
-        timeout: float = 120.0,
+        timeout: float = 300.0,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
