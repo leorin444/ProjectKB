@@ -46,7 +46,18 @@ ollama pull qwen2.5vl:7b
 
 ## Running the Application
 
-### 1. Start the API Server
+### Option A: One-Click Full Stack (Recommended)
+Launch both the API backend and Streamlit UI in a single command:
+```powershell
+.\start.ps1
+```
+This script checks Ollama, boots the FastAPI server, waits for the health check to pass, starts the Streamlit frontend, and automatically opens your browser at **http://localhost:8501**. Press Enter in the terminal anytime to cleanly stop both services.
+
+---
+
+### Option B: Manual Startup
+
+#### 1. Start the API Server
 ```powershell
 .\.venv\Scripts\python.exe scripts/run_api.py
 ```
